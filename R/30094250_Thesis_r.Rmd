@@ -1,0 +1,207 @@
+---
+title: "30094250 Thesis"
+author: "Ademiluyi Segun Excel"
+date: "2025-05-12"
+output: html_document
+---
+
+This Part of the work contains Sentiment Analysis and Emotion Classification . 
+The .IPYNB file in the Zip Folder has the other part of the Work.
+
+NOTE: Most the outputs in the session were exported as CSV files and used to create visualizations in Power BI. 
+
+```{r load_libraries, include=FALSE}
+install.packages("readxl")
+library()
+
+libraries <- c("tm", "tidytext", "ggplot2", "wordcloud", "syuzhet", "dplyr", 
+               "tibble", "textstem", "textdata", "tidyr", "Matrix", "topicmodels", 
+               "stringr", "reshape2", "LDAvis", "jsonlite",'readxl')
+
+
+# Load libraries
+for (lib in libraries) { 
+  library(lib, character.only=TRUE) 
+}
+```
+
+Load and Import the dataset
+
+```{r load_dataset, cache=TRUE}
+# file path
+posts_df <- read.csv("C:\\Users\\ademi\\Desktop\\Thesis\\Datasets\\translated_sentiment_data.csv")
+
+# Viewing the dataset
+View(posts_df)
+```
+
+```{r inspect_column, cache=TRUE}
+# Inspecting the column names
+colnames(posts_df)
+
+colnames(posts_df) <- make.names(colnames(posts_df))
+```
+
+NRC - EMOTION WORD Classification
+```{r emotion_Classification}
+# Load libraries
+library(tidyverse)
+library(tidytext)
+library(ggplot2)
+
+# Loading NRC Emotion Lexicon
+nrc <- get_sentiments("nrc")
+
+# Tokenizing the text
+emotion_tokens <- posts_df %>%
+  filter(!is.na(post)) %>%
+  unnest_tokens(word, post) %>%
+  inner_join(nrc, by = "word")  # This will Join with NRC lexicon
+
+# This will Count emotions per post
+emotion_counts <- emotion_tokens %>%
+  count(YearMonth, sentiment = sentiment)
+
+# Filtering for specific emotions
+dominant_emotions <- emotion_counts %>%
+  filter(sentiment %in% c("fear", "anger", "trust", "joy", "sadness", "anticipation"))
+
+# Plotting emotion trends over time
+ggplot(dominant_emotions, aes(x = YearMonth, y = n, color = sentiment, group = sentiment)) +
+  geom_line(linewidth = 1.2) +
+  labs(title = "Emotion Trends in COVID-19 Discourse Over Time",
+       x = "Year-Month", y = "Number of Emotion Words") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Exporting the Output as a CSV file.
+
+```{r emotion_Classification_csv}
+write.csv(dominant_emotions, 
+          file = "C:/Users/ademi/Desktop/Thesis/emotion_Classification.csv", 
+          row.names = FALSE)
+```
+
+```{r load_libraries, include=FALSE}
+install.packages("readxl")
+library()
+
+libraries <- c("tm", "tidytext", "ggplot2", "wordcloud", "syuzhet", "dplyr", 
+               "tibble", "textstem", "textdata", "tidyr", "Matrix", "topicmodels", 
+               "stringr", "reshape2", "LDAvis", "jsonlite",'readxl')
+
+
+# Load libraries
+for (lib in libraries) { 
+  library(lib, character.only=TRUE) 
+}
+```
+
+Load and Import the dataset
+
+```{r load_dataset, cache=TRUE}
+# Provide the correct file path
+posts_df <- read.csv("C:\\Users\\ademi\\Desktop\\Thesis\\Datasets\\translated_sentiment_data.csv")
+
+# View the dataset
+View(posts_df)
+```
+
+```{r inspect_column, cache=TRUE}
+# Inspect the column names
+colnames(posts_df)
+
+colnames(posts_df) <- make.names(colnames(posts_df))
+```
+
+Applying sentiment score using syuzhet: get_sentiment returns numeric score
+
+```{r sentiment Analysis, cache=TRUE}
+#Ensuring text is character and removing missing rows
+posts_df <- posts_df %>% filter(!is.na(post))
+posts_df$post <- as.character(posts_df$post)
+
+# Applying sentiment score using syuzhet (get_sentiment returns numeric score)
+posts_df$sentiment_score <- get_sentiment(posts_df$post, method = "syuzhet")
+
+# Sentiment classified as Positive, Neutral, or Negative
+posts_df$sentiment_label <- case_when(
+  posts_df$sentiment_score > 0 ~ "Positive",
+  posts_df$sentiment_score < 0 ~ "Negative",
+  TRUE ~ "Neutral"
+)
+```
+
+------------------------------------------------------------------------
+
+How has public sentiment evolved from 2020 to 2024
+
+```{r puublic_sentiment_evolve}
+sentiment_trend <- posts_df %>%
+  group_by(YearMonth, sentiment_label) %>%
+  summarise(count = n()) %>%
+  ungroup()
+
+ggplot(sentiment_trend, aes(x = YearMonth, y = count, color = sentiment_label, group = sentiment_label)) +
+  geom_line(size = 1.2) +
+  labs(title = "Monthly Sentiment Trends", x = "Year-Month", y = "Number of Posts") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r puublic_sentiment_evolve}
+write.csv(vaccine_posts, file = "C:/Users/ademi/Desktop/Thesis/puublic_sentiment_evolve.csv", row.names = FALSE)
+```
+
+------------------------------------------------------------------------
+
+Sentiment Distribution by Language
+
+```{r Top10_Words_Language_Sentiment}
+library(tidyverse)
+library(tidytext)
+
+# Define custom stop words (same as before)
+custom_stopwords <- c(
+  "covid", "coronavirus", "covidtesting", "covidpandemic", "covidvaccine",
+  "covidupdate", "coronavirusupdates", "coronaviruspandemic",
+  "link", "time", "https", "bio", "afccares", "people", "india"
+)
+
+# Tokenize and clean text
+tidy_lang <- posts_df %>%
+  filter(!is.na(post), Language %in% c("English", "Spanish")) %>%
+  unnest_tokens(word, post) %>%
+  filter(str_detect(word, "^[a-zA-Z]+$")) %>%
+  filter(!word %in% stop_words$word) %>%
+  filter(!word %in% custom_stopwords)
+
+# Count top 10 words by Language and Sentiment
+top_words_lang_sent <- tidy_lang %>%
+  count(Language, sentiment_label, word, sort = TRUE) %>%
+  group_by(Language, sentiment_label) %>%
+  slice_max(n, n = 10) %>%
+  ungroup()
+
+# Plot: Facet by Language and Sentiment
+ggplot(top_words_lang_sent, aes(x = reorder(word, n), y = n, fill = sentiment_label)) +
+  geom_col(show.legend = FALSE) +
+  facet_grid(Language ~ sentiment_label, scales = "free_y") +
+  coord_flip() +
+  labs(
+    title = "Top 10 Words by Language and Sentiment",
+    x = "Words", y = "Frequency"
+  ) +
+  scale_fill_manual(values = c("Positive" = "blue", "Neutral" = "green", "Negative" = "red")) +
+  theme_minimal()
+```
+
+```{r top_words_by_language_sentiment_csv}
+# Export the grouped word frequency data to CSV
+write.csv(top_words_lang_sent,
+          file = "C:/Users/ademi/Desktop/Thesis/top_words_by_language_sentiment.csv",
+          row.names = FALSE)
+```
+
+------------------------------------------------------------------------
